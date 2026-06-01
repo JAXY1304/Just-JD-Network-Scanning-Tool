@@ -1,0 +1,58 @@
+============================================================
+JUST-JD NETWORK SCANNING TOOL
+============================================================
+
+PING TEST
+8.8.8.8 Reachable | RTT: 13.18 ms
+
+DNS TEST
+google.com -> 192.178.173.102
+
+LOCAL IP
+192.168.56.1
+
+DEFAULT GATEWAY
+192.168.2.1
+
+PACKET LOSS TEST
+Packet Loss: 0%
+
+DEVICE DISCOVERY
+IP: 192.168.2.91 | MAC: e0:d4:64:06:41:f4
+
+Total Devices Found: 1
+
+SUBNET ANALYSIS
+Network ID : 192.168.2.0
+Broadcast : 192.168.2.255
+Usable Hosts : 254
+CIDR : /24
+
+PORT SCAN
+Port 22: CLOSED
+Port 80: OPEN
+Port 443: OPEN
+Port 445: CLOSED
+Port 3389: CLOSED
+
+Open Ports Found: 2
+
+TRACEROUTE
+Destination Reached Successfully
+
+NETWORK HEALTH SCORE
+100/100
+
+Report Saved: reports/scan_report.txt
+
+Report Saved: reports/scan_report.txt
+
+Report Saved: reports/scan_report.txt
+
+Report Saved: reports/scan_report.txt
+
+Report Saved: reports/scan_report.txt
+
+Report Saved: reports/scan_report.txt
+
+Report Saved: reports/scan_report.txt
