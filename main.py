@@ -1,56 +1,73 @@
+import socket
 import ipaddress
 
 from modules.ping_test import check_ping
 from modules.dns_test import resolve_domain
 from modules.network_info import get_local_ip
 from modules.network_info import get_gateway
+from modules.network_info import get_cidr
 from modules.health_score import calculate_score
 from modules.port_scan import scan_port
 from modules.traceroute import run_traceroute
 from modules.packet_loss import packet_loss_test
 from modules.arp_scan import scan_network
 from modules.subnet_calc import calculate_subnet
-from modules.network_info import get_cidr
 
 print("=" * 50)
 print("JUST-JD NETWORK SCANNING TOOL")
 print("=" * 50)
 
-# Ping Test
-result = check_ping("8.8.8.8")
+# Target = Gateway
+target = get_gateway()
 
+# Ping Test
 print("\nPING TEST")
+
+result = check_ping(target)
+
 print(result)
 
 # DNS Test
 print("\nDNS TEST")
-dns_result = resolve_domain("google.com")
+
+try:
+    socket.inet_aton(target)
+    dns_result = "IP Target - DNS Skipped"
+
+except:
+    dns_result = resolve_domain(target)
+
 print(dns_result)
-
-
 
 # Local IP
 print("\nLOCAL IP")
-print(get_local_ip())
+
+local_ip = get_local_ip()
+
+print(local_ip)
 
 # Gateway
 print("\nDEFAULT GATEWAY")
-print(get_gateway())
 
+gateway = get_gateway()
 
+print(gateway)
+
+# Traceroute
 print("\nTRACEROUTE TEST")
 
-trace_result = run_traceroute("8.8.8.8")
+trace_result = run_traceroute(target)
 
 print(trace_result)
 
-
+# Packet Loss
 print("\nPACKET LOSS TEST")
 
-loss = packet_loss_test("8.8.8.8")
+loss = packet_loss_test(target)
 
 print(f"Packet Loss: {loss}")
 
+# Device Discovery
 print("\nDEVICE DISCOVERY")
 
 local_ip = get_local_ip()
@@ -62,9 +79,7 @@ network = ipaddress.ip_network(
     strict=False
 )
 
-devices = scan_network(
-    str(network)
-)
+devices = scan_network(str(network))
 
 for device in devices:
 
@@ -72,15 +87,20 @@ for device in devices:
         f"IP: {device['ip']} | MAC: {device['mac']}"
     )
 
-print(f"\nTotal Devices Found: {len(devices)}")
+# Permission denied handling
+if (
+    len(devices) == 1
+    and devices[0]["ip"] == "Permission Denied"
+):
+    device_count = 0
 
+else:
+    device_count = len(devices)
 
+print(f"\nTotal Devices Found: {device_count}")
 
+# Subnet Analysis
 print("\nSUBNET ANALYSIS")
-
-local_ip = get_local_ip()
-
-cidr = get_cidr()
 
 subnet_info = calculate_subnet(
     local_ip,
@@ -92,18 +112,7 @@ print(f"Broadcast IP : {subnet_info['broadcast']}")
 print(f"Usable Hosts : {subnet_info['total_hosts']}")
 print(f"CIDR         : {subnet_info['cidr']}")
 
-
-
-
-
-
-
-
-
-
-
-
-
+# Port Scan
 open_ports = 0
 
 print("\nPORT SCAN")
@@ -112,17 +121,24 @@ ports = [22, 80, 443, 445, 3389]
 
 for port in ports:
 
-    status = scan_port("google.com", port)
+    status = scan_port(
+        target,
+        port
+    )
 
     print(f"Port {port}: {status}")
 
     if status == "OPEN":
         open_ports += 1
 
-
 print(f"\nOpen Ports Found: {open_ports}")
 
-score = calculate_score(result, dns_result, open_ports)
+# Health Score
+score = calculate_score(
+    result,
+    dns_result,
+    open_ports
+)
 
 print("\nNETWORK HEALTH SCORE")
 print(f"{score}/100")
