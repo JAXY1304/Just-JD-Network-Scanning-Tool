@@ -36,6 +36,23 @@ v1.6
 * Vulnerability Scanning
 * Nmap Integration
 * Wazuh Integration
+## Requirements
+
+### Windows
+
+* Npcap (Required for Device Discovery)
+
+### Linux
+
+* traceroute
+* sudo/root privileges for ARP scanning
+
+### Python Dependencies
+
+* PyQt6
+* Scapy
+* ping3
+* psutil
 
 ## Author
 
