@@ -1,3 +1,5 @@
+build/
+dist/
+*.spec
+reports/
 __pycache__/
-*.pyc
-.vscode/
