@@ -1,14 +1,28 @@
 import subprocess
 import platform
+import shutil
+
 
 def run_traceroute(host):
 
     try:
 
-        if platform.system() == "Windows":
+        system = platform.system()
+
+        if system == "Windows":
+
             command = ["tracert", host]
 
         else:
+
+            if shutil.which("traceroute") is None:
+
+                return (
+                    "Traceroute not installed.\n"
+                    "Ubuntu/Debian:\n"
+                    "sudo apt install traceroute -y"
+                )
+
             command = ["traceroute", host]
 
         result = subprocess.run(
