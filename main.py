@@ -8,6 +8,7 @@ from modules.traceroute import run_traceroute
 from modules.packet_loss import packet_loss_test
 from modules.arp_scan import scan_network
 from modules.subnet_calc import calculate_subnet
+from modules.network_info import get_cidr
 
 print("=" * 50)
 print("JUST-JD NETWORK SCANNING TOOL")
@@ -50,7 +51,11 @@ print(f"Packet Loss: {loss}")
 
 print("\nDEVICE DISCOVERY")
 
-devices = scan_network("192.168.2.0/24")
+local_ip = get_local_ip()
+
+network = ".".join(local_ip.split(".")[:3]) + ".0/24"
+
+devices = scan_network(network)
 
 for device in devices:
 
@@ -64,7 +69,14 @@ print(f"\nTotal Devices Found: {len(devices)}")
 
 print("\nSUBNET ANALYSIS")
 
-subnet_info = calculate_subnet("192.168.2.91", 24)
+local_ip = get_local_ip()
+
+cidr = get_cidr()
+
+subnet_info = calculate_subnet(
+    local_ip,
+    cidr
+)
 
 print(f"Network ID   : {subnet_info['network_id']}")
 print(f"Broadcast IP : {subnet_info['broadcast']}")
