@@ -1,3 +1,5 @@
+import ipaddress
+
 from modules.ping_test import check_ping
 from modules.dns_test import resolve_domain
 from modules.network_info import get_local_ip
@@ -53,9 +55,16 @@ print("\nDEVICE DISCOVERY")
 
 local_ip = get_local_ip()
 
-network = ".".join(local_ip.split(".")[:3]) + ".0/24"
+cidr = get_cidr()
 
-devices = scan_network(network)
+network = ipaddress.ip_network(
+    f"{local_ip}/{cidr}",
+    strict=False
+)
+
+devices = scan_network(
+    str(network)
+)
 
 for device in devices:
 

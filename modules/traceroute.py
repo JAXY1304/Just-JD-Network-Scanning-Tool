@@ -1,9 +1,18 @@
 import subprocess
+import platform
 
 def run_traceroute(host):
+
     try:
+
+        if platform.system() == "Windows":
+            command = ["tracert", host]
+
+        else:
+            command = ["traceroute", host]
+
         result = subprocess.run(
-            ["tracert", host],
+            command,
             capture_output=True,
             text=True
         )
@@ -11,4 +20,5 @@ def run_traceroute(host):
         return result.stdout
 
     except Exception as e:
+
         return f"Traceroute Error: {e}"

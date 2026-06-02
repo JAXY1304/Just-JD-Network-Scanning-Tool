@@ -2,22 +2,14 @@ import sys
 import os
 
 from PyQt6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QLabel,
-    QPushButton,
-    QTextEdit,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout,
-    QFrame,
-    QProgressBar,
-    QFileDialog
+    QApplication, QWidget, QLabel, QPushButton, QTextEdit,
+    QVBoxLayout, QHBoxLayout, QGridLayout, QFrame,
+    QProgressBar, QLineEdit
 )
 
 from modules.ping_test import check_ping
 from modules.dns_test import resolve_domain
-from modules.network_info import get_local_ip, get_gateway
+from modules.network_info import get_local_ip, get_gateway, get_cidr
 from modules.health_score import calculate_score
 from modules.packet_loss import packet_loss_test
 from modules.port_scan import scan_port
@@ -33,62 +25,43 @@ class NetworkScannerGUI(QWidget):
 
         self.report_data = ""
 
-        self.setWindowTitle("Just-JD Network Scanning Tool")
+        self.setWindowTitle("Just-JD Network Scanning Tool v2.2")
         self.resize(1200, 800)
 
         self.setStyleSheet("""
-        QWidget {
-            background-color: #1e1e1e;
-            color: white;
-        }
-
+        QWidget { background-color:#1e1e1e; color:white; }
         QPushButton {
-            background-color: #0078d7;
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 14px;
+            background-color:#0078d7;
+            color:white;
+            padding:10px;
+            border-radius:5px;
         }
-
-        QPushButton:hover {
-            background-color: #005fa3;
-        }
-
         QTextEdit {
-            background-color: #2b2b2b;
-            color: white;
-            font-family: Consolas;
-            font-size: 12px;
+            background-color:#2b2b2b;
+            color:white;
         }
-
-        QProgressBar {
-            border: 1px solid #444;
-            border-radius: 5px;
-            text-align: center;
-        }
-
-        QProgressBar::chunk {
-            background-color: #00aa55;
-        }
-
         QFrame {
-            background-color: #2b2b2b;
-            border: 1px solid #444;
-            border-radius: 10px;
+            background-color:#2b2b2b;
+            border:1px solid #444;
+            border-radius:10px;
         }
         """)
 
         main_layout = QVBoxLayout()
 
         title = QLabel("JUST-JD NETWORK SCANNING TOOL")
-        title.setStyleSheet("""
-            font-size:28px;
-            font-weight:bold;
-            color:#00aaff;
-        """)
+        title.setStyleSheet("font-size:28px;font-weight:bold;color:#00aaff;")
         main_layout.addWidget(title)
 
-        # Dashboard Cards
+        main_layout.addWidget(QLabel("Target Host / IP"))
+
+        self.target_input = QLineEdit()
+        gateway = get_gateway()
+        if gateway and gateway != "Not Found":
+            self.target_input.setText(gateway)
+        self.target_input.setPlaceholderText("Enter IP or Domain")
+        main_layout.addWidget(self.target_input)
+
         dashboard = QGridLayout()
 
         self.internet_value = QLabel("WAIT")
@@ -96,35 +69,18 @@ class NetworkScannerGUI(QWidget):
         self.devices_value = QLabel("0")
         self.score_value = QLabel("0/100")
 
-        dashboard.addWidget(
-            self.create_card("INTERNET", self.internet_value),
-            0, 0
-        )
-
-        dashboard.addWidget(
-            self.create_card("DNS", self.dns_value),
-            0, 1
-        )
-
-        dashboard.addWidget(
-            self.create_card("DEVICES", self.devices_value),
-            0, 2
-        )
-
-        dashboard.addWidget(
-            self.create_card("HEALTH", self.score_value),
-            0, 3
-        )
+        dashboard.addWidget(self.create_card("INTERNET", self.internet_value), 0, 0)
+        dashboard.addWidget(self.create_card("DNS", self.dns_value), 0, 1)
+        dashboard.addWidget(self.create_card("DEVICES", self.devices_value), 0, 2)
+        dashboard.addWidget(self.create_card("HEALTH", self.score_value), 0, 3)
 
         main_layout.addLayout(dashboard)
 
-        # Progress Bar
         self.progress = QProgressBar()
         self.progress.setValue(0)
         main_layout.addWidget(self.progress)
 
-        # Buttons
-        button_layout = QHBoxLayout()
+        btn_layout = QHBoxLayout()
 
         self.scan_button = QPushButton("Run Full Scan")
         self.scan_button.clicked.connect(self.run_scan)
@@ -132,12 +88,11 @@ class NetworkScannerGUI(QWidget):
         self.export_button = QPushButton("Export Report")
         self.export_button.clicked.connect(self.export_report)
 
-        button_layout.addWidget(self.scan_button)
-        button_layout.addWidget(self.export_button)
+        btn_layout.addWidget(self.scan_button)
+        btn_layout.addWidget(self.export_button)
 
-        main_layout.addLayout(button_layout)
+        main_layout.addLayout(btn_layout)
 
-        # Output
         self.output_box = QTextEdit()
         self.output_box.setReadOnly(True)
         main_layout.addWidget(self.output_box)
@@ -145,29 +100,16 @@ class NetworkScannerGUI(QWidget):
         self.setLayout(main_layout)
 
     def create_card(self, title, value_label):
-
         card = QFrame()
-
         layout = QVBoxLayout()
 
-        title_label = QLabel(title)
-        title_label.setStyleSheet("""
-            color:#00aaff;
-            font-size:14px;
-            font-weight:bold;
-            border:none;
-        """)
+        t = QLabel(title)
+        t.setStyleSheet("font-size:14px;font-weight:bold;color:#00aaff;border:none;")
 
-        value_label.setStyleSheet("""
-            color:#00ff88;
-            font-size:22px;
-            font-weight:bold;
-            border:none;
-        """)
+        value_label.setStyleSheet("font-size:22px;font-weight:bold;color:#00ff88;border:none;")
 
-        layout.addWidget(title_label)
+        layout.addWidget(t)
         layout.addWidget(value_label)
-
         card.setLayout(layout)
 
         return card
@@ -178,155 +120,136 @@ class NetworkScannerGUI(QWidget):
 
     def run_scan(self):
 
+        target = self.target_input.text().strip()
+
+        if not target:
+            target = get_gateway()
+
         self.output_box.clear()
         self.report_data = ""
-
         self.progress.setValue(0)
 
         self.log("=" * 60)
-        self.log("JUST-JD NETWORK SCANNING TOOL")
+        self.log("JUST-JD NETWORK SCANNING TOOL v2.2")
         self.log("=" * 60)
 
-        # Ping
-        ping_result = check_ping("8.8.8.8")
-
+        ping_result = check_ping(target)
         self.log("\nPING TEST")
         self.log(ping_result)
 
-        if "Reachable" in ping_result:
-            self.internet_value.setText("ONLINE")
-        else:
-            self.internet_value.setText("OFFLINE")
+        self.internet_value.setText(
+            "ONLINE" if "Reachable" in ping_result else "OFFLINE"
+        )
 
         self.progress.setValue(10)
 
-        # DNS
-        dns_result = resolve_domain("google.com")
+        if any(c.isalpha() for c in target):
 
+            dns_result = resolve_domain(target)
+
+        else:
+
+            dns_result = "IP Target - DNS Skipped"
         self.log("\nDNS TEST")
         self.log(dns_result)
 
         if "->" in dns_result:
+
             self.dns_value.setText("OK")
+
+        elif "Skipped" in dns_result:
+
+            self.dns_value.setText("N/A")
+
         else:
+
             self.dns_value.setText("FAIL")
 
         self.progress.setValue(20)
 
-        # Local IP
+        local_ip = get_local_ip()
+
         self.log("\nLOCAL IP")
-        self.log(get_local_ip())
+        self.log(local_ip)
 
         self.progress.setValue(30)
 
-        # Gateway
+        gateway = get_gateway()
+
         self.log("\nDEFAULT GATEWAY")
-        self.log(get_gateway())
+        self.log(gateway)
 
         self.progress.setValue(40)
 
-        # Packet Loss
-        loss = packet_loss_test("8.8.8.8")
+        loss = packet_loss_test(target)
 
         self.log("\nPACKET LOSS TEST")
         self.log(f"Packet Loss: {loss}")
 
         self.progress.setValue(50)
 
-        # Devices
         self.log("\nDEVICE DISCOVERY")
 
         try:
-            devices = scan_network("192.168.2.0/24")
+            network = ".".join(local_ip.split(".")[:3]) + ".0/24"
+            devices = scan_network(network)
 
             for device in devices:
-                self.log(
-                    f"IP: {device['ip']} | MAC: {device['mac']}"
-                )
+                self.log(f"IP: {device['ip']} | MAC: {device['mac']}")
 
-            self.log(
-                f"\nTotal Devices Found: {len(devices)}"
-            )
-
-            self.devices_value.setText(
-                str(len(devices))
-            )
+            self.log(f"\nTotal Devices Found: {len(devices)}")
+            self.devices_value.setText(str(len(devices)))
 
         except Exception as e:
             self.log(str(e))
 
-        self.progress.setValue(60)
+        self.progress.setValue(65)
 
-        # Subnet
         self.log("\nSUBNET ANALYSIS")
 
-        subnet = calculate_subnet(
-            "192.168.2.91",
-            24
-        )
+        try:
+            cidr = get_cidr()
 
-        self.log(
-            f"Network ID : {subnet['network_id']}"
-        )
+            subnet = calculate_subnet(local_ip, cidr)
 
-        self.log(
-            f"Broadcast : {subnet['broadcast']}"
-        )
+            self.log(f"Network ID : {subnet['network_id']}")
+            self.log(f"Broadcast : {subnet['broadcast']}")
+            self.log(f"Usable Hosts : {subnet['total_hosts']}")
+            self.log(f"CIDR : {subnet['cidr']}")
 
-        self.log(
-            f"Usable Hosts : {subnet['total_hosts']}"
-        )
+        except Exception as e:
+            self.log(str(e))
 
-        self.log(
-            f"CIDR : {subnet['cidr']}"
-        )
+        self.progress.setValue(75)
 
-        self.progress.setValue(70)
-
-        # Ports
         self.log("\nPORT SCAN")
 
         ports = [22, 80, 443, 445, 3389]
-
         open_ports = 0
 
         for port in ports:
+            status = scan_port(target, port)
 
-            status = scan_port(
-                "google.com",
-                port
-            )
-
-            self.log(
-                f"Port {port}: {status}"
-            )
+            self.log(f"Port {port}: {status}")
 
             if status == "OPEN":
                 open_ports += 1
 
-        self.log(
-            f"\nOpen Ports Found: {open_ports}"
-        )
+        self.log(f"\nOpen Ports Found: {open_ports}")
 
-        self.progress.setValue(85)
+        self.progress.setValue(90)
 
-        # Traceroute
         self.log("\nTRACEROUTE")
 
-        trace = run_traceroute("8.8.8.8")
+        trace = run_traceroute(target)
 
-        if "Trace complete" in trace:
-            self.log(
-                "Destination Reached Successfully"
-            )
+        if trace:
+            self.log(trace[:5000])
         else:
-            self.log(
-                "Traceroute Completed"
-            )
+            self.log("Traceroute Failed")
 
         self.progress.setValue(95)
 
-        # Health Score
         score = calculate_score(
             ping_result,
             dns_result,
@@ -336,9 +259,7 @@ class NetworkScannerGUI(QWidget):
         self.log("\nNETWORK HEALTH SCORE")
         self.log(f"{score}/100")
 
-        self.score_value.setText(
-            f"{score}/100"
-        )
+        self.score_value.setText(f"{score}/100")
 
         self.progress.setValue(100)
 
@@ -351,16 +272,11 @@ class NetworkScannerGUI(QWidget):
         with open(path, "w", encoding="utf-8") as f:
             f.write(self.report_data)
 
-        self.log(
-            f"\nReport Saved: {path}"
-        )
+        self.log(f"\nReport Saved: {path}")
 
 
 if __name__ == "__main__":
-
     app = QApplication(sys.argv)
-
     window = NetworkScannerGUI()
     window.show()
-
     sys.exit(app.exec())
