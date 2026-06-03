@@ -7,7 +7,7 @@ def calculate_score(ping_status, dns_status, open_ports):
         score += 40
 
     # DNS
-    if "->" in dns_status:
+    if "->" in dns_status or "Skipped" in dns_status:
         score += 40
 
     # Ports

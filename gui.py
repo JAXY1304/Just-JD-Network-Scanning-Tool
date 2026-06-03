@@ -1,5 +1,6 @@
 import sys
 import os
+import ipaddress
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QTextEdit,
@@ -191,8 +192,16 @@ class NetworkScannerGUI(QWidget):
         self.log("\nDEVICE DISCOVERY")
 
         try:
-            network = ".".join(local_ip.split(".")[:3]) + ".0/24"
-            devices = scan_network(network)
+            cidr = get_cidr()
+
+            network = ipaddress.ip_network(
+            f"{local_ip}/{cidr}",
+            strict=False
+            )
+
+            devices = scan_network(
+            str(network)
+)
 
             for device in devices:
                 self.log(f"IP: {device['ip']} | MAC: {device['mac']}")
@@ -228,7 +237,14 @@ class NetworkScannerGUI(QWidget):
         open_ports = 0
 
         for port in ports:
-            status = scan_port(target, port)
+            try:
+                status = scan_port(
+                    target,
+                    port
+                )
+
+            except Exception as e:
+                status = f"ERROR: {e}"
 
             self.log(f"Port {port}: {status}")
 
@@ -241,7 +257,10 @@ class NetworkScannerGUI(QWidget):
 
         self.log("\nTRACEROUTE")
 
-        trace = run_traceroute(target)
+        try:
+            trace = run_traceroute(target)
+        except Exception as e:
+            trace = f"Traceroute Error: {e}"
 
         if trace:
             self.log(trace[:5000])
