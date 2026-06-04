@@ -14,6 +14,18 @@ A Python-based Network Health and Security Assessment Toolkit.
 * Subnet Analysis
 * Port Scanner
 * Network Health Score
+  
+Version: v2.5
+- Network Discovery
+- Vendor Detection
+- Port Scanning
+- Risk Dashboard
+- Real-Time Monitoring
+- Alert Engine
+- Historical Monitoring
+- Asset Inventory
+- Device Event Tracking
+- CSV Reporting
 
 ## Technologies Used
 
