@@ -25,6 +25,7 @@ from modules.traceroute import run_traceroute
 from modules.subnet_calc import calculate_subnet
 from modules.monitor import monitor_host
 from modules.inventory import save_inventory
+from modules.device_events import save_device_event
 
 
 class ScanWorker(QThread):
@@ -70,7 +71,7 @@ class NetworkScannerGUI(QWidget):
         self.report_data = ""
         
         self.monitor_log_file = "reports/monitor_logs.csv"
-        self.previous_devices = set()
+        self.previous_devices = {}
         self.alert_file = "reports/alerts.csv"
         self.mac_history = {}
         self.total_checks = 0
@@ -473,12 +474,13 @@ class NetworkScannerGUI(QWidget):
 
             devices = get_arp_devices()
             
-            current_devices = set()
+            current_devices = {}
 
             for device in devices:
                 ip = device["ip"]
                 mac = device["mac"]
-                current_devices.add(ip)
+                vendor = device.get("vendor", "Unknown")
+                current_devices[ip] = vendor
                 
                 if ip in self.mac_history:
                     old_mac = self.mac_history[ip]
@@ -493,13 +495,17 @@ class NetworkScannerGUI(QWidget):
                     f"VENDOR: {device['vendor']}"
                 )
 
-            new_devices = current_devices - self.previous_devices
+            new_devices = set(current_devices) - set(self.previous_devices)
             for ip in new_devices:
-                log_signal.emit(f"[NEW DEVICE] {ip}")
+                vendor = current_devices[ip]
+                log_signal.emit(f"[NEW DEVICE] {ip} ({vendor})")
+                save_device_event("NEW_DEVICE", ip, vendor)
                 
-            lost_devices = self.previous_devices - current_devices
+            lost_devices = set(self.previous_devices) - set(current_devices)
             for ip in lost_devices:
-                log_signal.emit(f"[DEVICE LOST] {ip}")
+                vendor = self.previous_devices[ip]
+                log_signal.emit(f"[DEVICE LOST] {ip} ({vendor})")
+                save_device_event("DEVICE_LOST", ip, vendor)
                 
             self.previous_devices = current_devices
             
