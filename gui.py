@@ -4,12 +4,12 @@ import ipaddress
 import csv
 from datetime import datetime
 
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QTextEdit,
     QVBoxLayout, QHBoxLayout, QGridLayout, QFrame,
-    QProgressBar, QLineEdit
+    QProgressBar, QLineEdit, QSizePolicy
 )
 
 from modules.ping_test import check_ping
@@ -87,7 +87,9 @@ class NetworkScannerGUI(QWidget):
         self.monitored_hosts = []
 
         self.setWindowTitle("JUST-JD NOC PLATFORM v3.1")
-        self.resize(1600, 900)
+        screen = QApplication.primaryScreen()
+        size = screen.availableGeometry()
+        self.resize(size.width(), size.height())
 
         self.setStyleSheet("""
 QWidget {
@@ -102,15 +104,16 @@ QFrame {
 }
 
 QPushButton {
-    background-color: #2563eb;
-    border-radius: 8px;
-    padding: 12px;
-    color: white;
-    font-weight: bold;
+    background:#3366dd;
+    color:white;
+    border:none;
+    border-radius:12px;
+    font-weight:bold;
+    padding:12px;
 }
 
 QPushButton:hover {
-    background-color: #3b82f6;
+    background:#4477ff;
 }
 
 QTextEdit {
@@ -131,6 +134,7 @@ QLineEdit {
 
         title = QLabel("JUST-JD NOC PLATFORM")
         title.setStyleSheet("font-size:28px;font-weight:bold;color:#00aaff;")
+        title.setFixedHeight(45)
         main_layout.addWidget(title)
 
         main_layout.addWidget(QLabel("Target Host / IP"))
@@ -143,6 +147,9 @@ QLineEdit {
         main_layout.addWidget(self.target_input)
 
         dashboard = QGridLayout()
+        dashboard.setHorizontalSpacing(8)
+        dashboard.setVerticalSpacing(8)
+        dashboard.setContentsMargins(0, 0, 0, 0)
 
         self.internet_value = QLabel("WAIT")
         self.dns_value = QLabel("WAIT")
@@ -200,21 +207,53 @@ QLineEdit {
 
         main_layout.addLayout(btn_layout)
         
-        console_title = QLabel("LIVE MONITORING CONSOLE")
-        console_title.setStyleSheet("font-size:20px;font-weight:bold;color:#38bdf8;")
+        console_title = QLabel("📡 LIVE MONITORING CONSOLE")
+        console_title.setStyleSheet("""
+font-size:22px;
+font-weight:bold;
+color:#33bbff;
+""")
         main_layout.addWidget(console_title)
 
         self.output_box = QTextEdit()
+        self.output_box.setStyleSheet("""
+QTextEdit{
+    background:#04132d;
+    color:#00ffae;
+    font-family:Consolas;
+    font-size:11pt;
+    border:1px solid #00bfff;
+    border-radius:10px;
+    padding:10px;
+}
+""")
         self.output_box.setReadOnly(True)
-        self.output_box.setMinimumHeight(550)
-        main_layout.addWidget(self.output_box)
+        self.output_box.setMinimumHeight(250)
+        self.output_box.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding
+        )
+        main_layout.addWidget(self.output_box, stretch=1)
 
         self.setLayout(main_layout)
 
     def create_card(self, title, value_label):
         card = QFrame()
-        card.setMinimumHeight(120)
+        card.setFixedHeight(90)
         card.setMinimumWidth(250)
+        card.setStyleSheet("""
+QFrame{
+    background:#1b2a44;
+    border:1px solid #00bfff;
+    border-radius:15px;
+}
+QFrame:hover{
+    border:2px solid #00ffff;
+}
+""")
+        
+        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         layout = QVBoxLayout()
 
         t = QLabel(title)
@@ -253,6 +292,9 @@ border:none;
     def log(self, text):
         self.output_box.append(text)
         self.report_data += text + "\n"
+        self.output_box.verticalScrollBar().setValue(
+            self.output_box.verticalScrollBar().maximum()
+        )
 
     def run_scan(self):
 
