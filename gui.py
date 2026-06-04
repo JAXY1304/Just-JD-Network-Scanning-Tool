@@ -86,31 +86,50 @@ class NetworkScannerGUI(QWidget):
 
         self.monitored_hosts = []
 
-        self.setWindowTitle("Just-JD Network Scanning Tool v2.2")
-        self.resize(1200, 800)
+        self.setWindowTitle("JUST-JD NOC PLATFORM v3.1")
+        self.resize(1600, 900)
 
         self.setStyleSheet("""
-        QWidget { background-color:#1e1e1e; color:white; }
-        QPushButton {
-            background-color:#0078d7;
-            color:white;
-            padding:10px;
-            border-radius:5px;
-        }
-        QTextEdit {
-            background-color:#2b2b2b;
-            color:white;
-        }
-        QFrame {
-            background-color:#2b2b2b;
-            border:1px solid #444;
-            border-radius:10px;
-        }
-        """)
+QWidget {
+    background-color: #0f172a;
+    color: white;
+    font-size: 12px;
+}
+
+QFrame {
+    background-color: #1e293b;
+    border-radius: 12px;
+}
+
+QPushButton {
+    background-color: #2563eb;
+    border-radius: 8px;
+    padding: 12px;
+    color: white;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #3b82f6;
+}
+
+QTextEdit {
+    background-color: #111827;
+    border: 1px solid #334155;
+    color: #00ff88;
+}
+
+QLineEdit {
+    background-color: #111827;
+    border: 1px solid #334155;
+    padding: 10px;
+    border-radius: 8px;
+}
+""")
 
         main_layout = QVBoxLayout()
 
-        title = QLabel("JUST-JD NETWORK SCANNING TOOL")
+        title = QLabel("JUST-JD NOC PLATFORM")
         title.setStyleSheet("font-size:28px;font-weight:bold;color:#00aaff;")
         main_layout.addWidget(title)
 
@@ -134,71 +153,81 @@ class NetworkScannerGUI(QWidget):
         self.alert_value = QLabel("0")
         self.alert_count = 0
         self.hosts_value = QLabel("0")
+        self.events_value = QLabel("0")
+        self.uptime_value = QLabel("100%")
+        
+        try:
+            if os.path.exists("reports/device_events.csv"):
+                with open("reports/device_events.csv", "r", encoding="utf-8") as f:
+                    self.events_value.setText(str(sum(1 for row in f) - 1))
+        except Exception:
+            pass
 
-        dashboard.addWidget(self.create_card("INTERNET", self.internet_value), 0, 0)
-        dashboard.addWidget(self.create_card("DNS", self.dns_value), 0, 1)
-        dashboard.addWidget(self.create_card("DEVICES", self.devices_value), 0, 2)
-        dashboard.addWidget(self.create_card("RISKS", self.risk_value), 0, 3)
-        dashboard.addWidget(self.create_card("MONITORED", self.monitored_value), 0, 4)
-        dashboard.addWidget(self.create_card("ALERTS", self.alert_value), 0, 5)
-        dashboard.addWidget(self.create_card("HOSTS", self.hosts_value), 0, 6)
-        dashboard.addWidget(self.create_card("HEALTH", self.score_value), 0, 7)
+        dashboard.addWidget(self.create_card("🖥 TOTAL HOSTS", self.hosts_value), 0, 0)
+        dashboard.addWidget(self.create_card("🌐 ONLINE HOSTS", self.monitored_value), 0, 1)
+        dashboard.addWidget(self.create_card("🚨 ALERTS", self.alert_value), 0, 2)
+        dashboard.addWidget(self.create_card("⚠ RISKS", self.risk_value), 0, 3)
+
+        dashboard.addWidget(self.create_card("📈 UPTIME", self.uptime_value), 1, 0)
+        dashboard.addWidget(self.create_card("📋 EVENTS", self.events_value), 1, 1)
+        dashboard.addWidget(self.create_card("💚 HEALTH", self.score_value), 1, 2)
+        dashboard.addWidget(self.create_card("🔍 DEVICES", self.devices_value), 1, 3)
 
         main_layout.addLayout(dashboard)
 
-        self.progress = QProgressBar()
-        self.progress.setValue(0)
-        main_layout.addWidget(self.progress)
+        # self.progress = QProgressBar()
+        # self.progress.setValue(0)
+        # main_layout.addWidget(self.progress)
 
         btn_layout = QHBoxLayout()
 
-        self.scan_button = QPushButton("Run Full Scan")
+        self.scan_button = QPushButton("🔍 Run Full Scan")
         self.scan_button.clicked.connect(self.run_scan)
 
-        self.monitor_button = QPushButton(
-            "Start Monitoring"
-        )
+        self.monitor_button = QPushButton("▶ Start Monitoring")
+        self.monitor_button.clicked.connect(self.start_monitoring)
 
-        self.monitor_button.clicked.connect(
-            self.start_monitoring
-        )
+        self.stop_button = QPushButton("⏹ Stop Monitoring")
+        self.stop_button.clicked.connect(self.stop_monitoring)
 
-        self.stop_monitor_button = QPushButton(
-            "Stop Monitoring"
-        )
-
-        self.stop_monitor_button.clicked.connect(
-            self.stop_monitoring
-        )
-
-        self.export_button = QPushButton("Export Report")
+        self.export_button = QPushButton("📄 Export Report")
         self.export_button.clicked.connect(self.export_report)
 
         btn_layout.addWidget(self.scan_button)
-        btn_layout.addWidget(
-            self.monitor_button
-        )
-        btn_layout.addWidget(
-            self.stop_monitor_button
-        )
+        btn_layout.addWidget(self.monitor_button)
+        btn_layout.addWidget(self.stop_button)
         btn_layout.addWidget(self.export_button)
 
         main_layout.addLayout(btn_layout)
+        
+        console_title = QLabel("LIVE MONITORING CONSOLE")
+        console_title.setStyleSheet("font-size:20px;font-weight:bold;color:#38bdf8;")
+        main_layout.addWidget(console_title)
 
         self.output_box = QTextEdit()
         self.output_box.setReadOnly(True)
+        self.output_box.setMinimumHeight(550)
         main_layout.addWidget(self.output_box)
 
         self.setLayout(main_layout)
 
     def create_card(self, title, value_label):
         card = QFrame()
+        card.setMinimumHeight(120)
+        card.setMinimumWidth(250)
         layout = QVBoxLayout()
 
         t = QLabel(title)
         t.setStyleSheet("font-size:14px;font-weight:bold;color:#00aaff;border:none;")
 
-        value_label.setStyleSheet("font-size:22px;font-weight:bold;color:#00ff88;border:none;")
+        value_label.setStyleSheet(
+"""
+font-size:32px;
+font-weight:bold;
+color:#00ff88;
+border:none;
+"""
+        )
 
         layout.addWidget(t)
         layout.addWidget(value_label)
@@ -240,7 +269,7 @@ class NetworkScannerGUI(QWidget):
         self.worker = ScanWorker(self, target)
 
         self.worker.log_signal.connect(self.log)
-        self.worker.progress_signal.connect(self.progress.setValue)
+        # self.worker.progress_signal.connect(self.progress.setValue)
         self.worker.internet_signal.connect(self.internet_value.setText)
         self.worker.dns_signal.connect(self.dns_value.setText)
         self.worker.devices_signal.connect(self.devices_value.setText)
@@ -367,6 +396,7 @@ class NetworkScannerGUI(QWidget):
         if self.total_checks > 0:
             availability = (self.online_checks / self.total_checks) * 100
             self.log(f"Availability: {availability:.2f}%")
+            self.uptime_value.setText(f"{availability:.2f}%")
 
     def update_alert_color(self):
 
