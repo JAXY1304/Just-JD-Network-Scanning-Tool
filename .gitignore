@@ -3,3 +3,9 @@ dist/
 *.spec
 reports/
 __pycache__/
+build/
+dist/
+__pycache__/
+*.pyc
+reports/*.csv
+reports/*.txt
