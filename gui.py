@@ -1,6 +1,8 @@
 import sys
 import os
 import ipaddress
+import csv
+from datetime import datetime
 
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer
 
@@ -22,6 +24,7 @@ from modules.security_check import analyze_port
 from modules.traceroute import run_traceroute
 from modules.subnet_calc import calculate_subnet
 from modules.monitor import monitor_host
+from modules.inventory import save_inventory
 
 
 class ScanWorker(QThread):
@@ -36,6 +39,7 @@ class ScanWorker(QThread):
     devices_signal = pyqtSignal(str)
     score_signal = pyqtSignal(str)
     risk_signal = pyqtSignal(str)
+    hosts_signal = pyqtSignal(str)
 
     def __init__(self, gui, target):
         super().__init__()
@@ -51,7 +55,8 @@ class ScanWorker(QThread):
             self.dns_signal,
             self.devices_signal,
             self.score_signal,
-            self.risk_signal
+            self.risk_signal,
+            self.hosts_signal
         )
 
         self.finished_signal.emit()
@@ -63,6 +68,14 @@ class NetworkScannerGUI(QWidget):
         super().__init__()
 
         self.report_data = ""
+        
+        self.monitor_log_file = "reports/monitor_logs.csv"
+        self.previous_devices = set()
+        self.alert_file = "reports/alerts.csv"
+        self.mac_history = {}
+        self.total_checks = 0
+        self.online_checks = 0
+        self.offline_checks = 0
 
         self.monitor_timer = QTimer()
 
@@ -119,6 +132,7 @@ class NetworkScannerGUI(QWidget):
         self.monitored_value = QLabel("0")
         self.alert_value = QLabel("0")
         self.alert_count = 0
+        self.hosts_value = QLabel("0")
 
         dashboard.addWidget(self.create_card("INTERNET", self.internet_value), 0, 0)
         dashboard.addWidget(self.create_card("DNS", self.dns_value), 0, 1)
@@ -126,7 +140,8 @@ class NetworkScannerGUI(QWidget):
         dashboard.addWidget(self.create_card("RISKS", self.risk_value), 0, 3)
         dashboard.addWidget(self.create_card("MONITORED", self.monitored_value), 0, 4)
         dashboard.addWidget(self.create_card("ALERTS", self.alert_value), 0, 5)
-        dashboard.addWidget(self.create_card("HEALTH", self.score_value), 0, 6)
+        dashboard.addWidget(self.create_card("HOSTS", self.hosts_value), 0, 6)
+        dashboard.addWidget(self.create_card("HEALTH", self.score_value), 0, 7)
 
         main_layout.addLayout(dashboard)
 
@@ -190,6 +205,21 @@ class NetworkScannerGUI(QWidget):
 
         return card
 
+    def save_monitor_log(self, host, status):
+        os.makedirs("reports", exist_ok=True)
+        file_exists = os.path.isfile(self.monitor_log_file)
+        with open(self.monitor_log_file, "a", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            if not file_exists:
+                writer.writerow(["TIME", "HOST", "STATUS"])
+            writer.writerow([datetime.now().strftime("%H:%M:%S"), host, status])
+
+    def save_alert(self, host, alert):
+        os.makedirs("reports", exist_ok=True)
+        with open(self.alert_file, "a", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow([datetime.now().strftime("%H:%M:%S"), host, alert])
+
     def log(self, text):
         self.output_box.append(text)
         self.report_data += text + "\n"
@@ -215,6 +245,7 @@ class NetworkScannerGUI(QWidget):
         self.worker.devices_signal.connect(self.devices_value.setText)
         self.worker.score_signal.connect(self.score_value.setText)
         self.worker.risk_signal.connect(self.update_risk_card)
+        self.worker.hosts_signal.connect(self.hosts_value.setText)
         self.worker.finished_signal.connect(self.scan_finished)
 
         self.worker.start()
@@ -287,8 +318,6 @@ class NetworkScannerGUI(QWidget):
 
     def run_monitor_check(self):
 
-        from datetime import datetime
-
         current_time = datetime.now().strftime(
             "%H:%M:%S"
         )
@@ -298,6 +327,9 @@ class NetworkScannerGUI(QWidget):
             status = monitor_host(host)
 
             if status:
+                self.total_checks += 1
+                self.online_checks += 1
+                self.save_monitor_log(host, "ONLINE")
 
                 self.log(
                     f"\n[MONITOR] {host} ONLINE"
@@ -308,6 +340,10 @@ class NetworkScannerGUI(QWidget):
                 )
 
             else:
+                self.total_checks += 1
+                self.offline_checks += 1
+                self.save_monitor_log(host, "OFFLINE")
+                self.save_alert(host, "OFFLINE")
 
                 QApplication.beep()
 
@@ -326,6 +362,10 @@ class NetworkScannerGUI(QWidget):
                 self.log(
                     f"Time: {current_time}"
                 )
+                
+        if self.total_checks > 0:
+            availability = (self.online_checks / self.total_checks) * 100
+            self.log(f"Availability: {availability:.2f}%")
 
     def update_alert_color(self):
 
@@ -356,7 +396,8 @@ class NetworkScannerGUI(QWidget):
         dns_signal,
         devices_signal,
         score_signal,
-        risk_signal
+        risk_signal,
+        hosts_signal
     ):
 
         progress_signal.emit(0)
@@ -431,8 +472,19 @@ class NetworkScannerGUI(QWidget):
             )
 
             devices = get_arp_devices()
+            
+            current_devices = set()
 
             for device in devices:
+                ip = device["ip"]
+                mac = device["mac"]
+                current_devices.add(ip)
+                
+                if ip in self.mac_history:
+                    old_mac = self.mac_history[ip]
+                    if old_mac != mac:
+                        log_signal.emit(f"[WARNING] {ip} MAC Changed")
+                self.mac_history[ip] = mac
 
                 log_signal.emit(
                     f"IP: {device['ip']} | "
@@ -441,8 +493,21 @@ class NetworkScannerGUI(QWidget):
                     f"VENDOR: {device['vendor']}"
                 )
 
+            new_devices = current_devices - self.previous_devices
+            for ip in new_devices:
+                log_signal.emit(f"[NEW DEVICE] {ip}")
+                
+            lost_devices = self.previous_devices - current_devices
+            for ip in lost_devices:
+                log_signal.emit(f"[DEVICE LOST] {ip}")
+                
+            self.previous_devices = current_devices
+            
+            save_inventory(devices)
+
             log_signal.emit(f"\nTotal Devices Found: {len(devices)}")
             devices_signal.emit(str(len(devices)))
+            hosts_signal.emit(str(len(devices)))
 
         except Exception as e:
             log_signal.emit(str(e))
@@ -472,8 +537,19 @@ class NetworkScannerGUI(QWidget):
         open_ports = 0
         risk_count = 0
         security_findings = []
+        
+        risk_table = {
+            23: "HIGH",
+            21: "HIGH",
+            445: "MEDIUM",
+            80: "LOW",
+            443: "LOW"
+        }
 
         for port in ports:
+            if port in risk_table:
+                severity = risk_table[port]
+                log_signal.emit(f"Risk: {severity}")
 
             try:
                 status = scan_port(
@@ -578,6 +654,7 @@ class NetworkScannerGUI(QWidget):
             f.write(self.report_data)
 
         self.log(f"\nReport Saved: {path}")
+        self.log("Professional Report Pack Saved")
 
 
 if __name__ == "__main__":

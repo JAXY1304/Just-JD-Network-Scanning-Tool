@@ -1,15 +1,15 @@
 ============================================================
-JUST-JD NETWORK SCANNING TOOL
+JUST-JD NETWORK SCANNING TOOL v2.2
 ============================================================
 
 PING TEST
-8.8.8.8 Reachable | RTT: 13.18 ms
+192.168.2.1 Reachable | RTT: 5.03 ms
 
 DNS TEST
-google.com -> 192.178.173.102
+IP Target - DNS Skipped
 
 LOCAL IP
-192.168.56.1
+192.168.2.91
 
 DEFAULT GATEWAY
 192.168.2.1
@@ -18,9 +18,14 @@ PACKET LOSS TEST
 Packet Loss: 0%
 
 DEVICE DISCOVERY
-IP: 192.168.2.91 | MAC: e0:d4:64:06:41:f4
+IP: 192.168.2.1 | HOST: Unknown | MAC: 48:f8:db:6e:fa:18 | VENDOR: HUAWEI TECHNOLOGIES CO.,LTD
+IP: 192.168.2.37 | HOST: Unknown | MAC: 48:46:c1:62:6c:06 | VENDOR: FN-LINK TECHNOLOGY LIMITED
+IP: 192.168.2.71 | HOST: Unknown | MAC: 74:3a:f4:10:ba:d0 | VENDOR: Intel Corporate
+[NEW DEVICE] 192.168.2.1
+[NEW DEVICE] 192.168.2.71
+[NEW DEVICE] 192.168.2.37
 
-Total Devices Found: 1
+Total Devices Found: 3
 
 SUBNET ANALYSIS
 Network ID : 192.168.2.0
@@ -30,29 +35,52 @@ CIDR : /24
 
 PORT SCAN
 Port 22: CLOSED
+Risk: LOW
 Port 80: OPEN
+Risk: LOW
 Port 443: OPEN
+Risk: MEDIUM
 Port 445: CLOSED
 Port 3389: CLOSED
 
 Open Ports Found: 2
 
+SECURITY FINDINGS
+
+80/TCP HTTP
+Risk: LOW
+Reason: Web service detected.
+
+443/TCP HTTPS
+Risk: LOW
+Reason: Secure web service detected.
+
 TRACEROUTE
-Destination Reached Successfully
+
+Tracing route to 192.168.2.1 over a maximum of 30 hops
+
+  1     2 ms     2 ms     2 ms  192.168.2.1 
+
+Trace complete.
+
 
 NETWORK HEALTH SCORE
 100/100
 
-Report Saved: reports/scan_report.txt
+SCAN COMPLETED
 
-Report Saved: reports/scan_report.txt
+Monitoring Started: 192.168.2.1
 
-Report Saved: reports/scan_report.txt
+[MONITOR] 192.168.2.1 ONLINE
+Time: 15:21:03
+Availability: 100.00%
 
-Report Saved: reports/scan_report.txt
+[MONITOR] 192.168.2.1 ONLINE
+Time: 15:21:08
+Availability: 100.00%
 
-Report Saved: reports/scan_report.txt
+[MONITOR] 192.168.2.1 ONLINE
+Time: 15:21:13
+Availability: 100.00%
 
-Report Saved: reports/scan_report.txt
-
-Report Saved: reports/scan_report.txt
+Monitoring Stopped
