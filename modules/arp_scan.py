@@ -1,3 +1,4 @@
+import socket
 from scapy.all import ARP, Ether, srp
 
 def scan_network(network):
@@ -40,9 +41,15 @@ def scan_network(network):
 
     for sent, received in result:
 
+        try:
+            hostname = socket.gethostbyaddr(received.psrc)[0]
+        except:
+            hostname = "Unknown"
+
         devices.append(
             {
                 "ip": received.psrc,
+                "hostname": hostname,
                 "mac": received.hwsrc
             }
         )

@@ -2,6 +2,8 @@ import sys
 import os
 import ipaddress
 
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer
+
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QTextEdit,
     QVBoxLayout, QHBoxLayout, QGridLayout, QFrame,
@@ -15,8 +17,44 @@ from modules.health_score import calculate_score
 from modules.packet_loss import packet_loss_test
 from modules.port_scan import scan_port
 from modules.arp_scan import scan_network
+from modules.network_discovery import get_arp_devices
+from modules.security_check import analyze_port
 from modules.traceroute import run_traceroute
 from modules.subnet_calc import calculate_subnet
+from modules.monitor import monitor_host
+
+
+class ScanWorker(QThread):
+
+    log_signal = pyqtSignal(str)
+    progress_signal = pyqtSignal(int)
+    finished_signal = pyqtSignal()
+
+    # Safety signals for updating UI labels from background thread
+    internet_signal = pyqtSignal(str)
+    dns_signal = pyqtSignal(str)
+    devices_signal = pyqtSignal(str)
+    score_signal = pyqtSignal(str)
+    risk_signal = pyqtSignal(str)
+
+    def __init__(self, gui, target):
+        super().__init__()
+        self.gui = gui
+        self.target = target
+
+    def run(self):
+        self.gui.perform_scan(
+            self.target,
+            self.log_signal,
+            self.progress_signal,
+            self.internet_signal,
+            self.dns_signal,
+            self.devices_signal,
+            self.score_signal,
+            self.risk_signal
+        )
+
+        self.finished_signal.emit()
 
 
 class NetworkScannerGUI(QWidget):
@@ -25,6 +63,14 @@ class NetworkScannerGUI(QWidget):
         super().__init__()
 
         self.report_data = ""
+
+        self.monitor_timer = QTimer()
+
+        self.monitor_timer.timeout.connect(
+            self.run_monitor_check
+        )
+
+        self.monitored_hosts = []
 
         self.setWindowTitle("Just-JD Network Scanning Tool v2.2")
         self.resize(1200, 800)
@@ -69,11 +115,18 @@ class NetworkScannerGUI(QWidget):
         self.dns_value = QLabel("WAIT")
         self.devices_value = QLabel("0")
         self.score_value = QLabel("0/100")
+        self.risk_value = QLabel("0")
+        self.monitored_value = QLabel("0")
+        self.alert_value = QLabel("0")
+        self.alert_count = 0
 
         dashboard.addWidget(self.create_card("INTERNET", self.internet_value), 0, 0)
         dashboard.addWidget(self.create_card("DNS", self.dns_value), 0, 1)
         dashboard.addWidget(self.create_card("DEVICES", self.devices_value), 0, 2)
-        dashboard.addWidget(self.create_card("HEALTH", self.score_value), 0, 3)
+        dashboard.addWidget(self.create_card("RISKS", self.risk_value), 0, 3)
+        dashboard.addWidget(self.create_card("MONITORED", self.monitored_value), 0, 4)
+        dashboard.addWidget(self.create_card("ALERTS", self.alert_value), 0, 5)
+        dashboard.addWidget(self.create_card("HEALTH", self.score_value), 0, 6)
 
         main_layout.addLayout(dashboard)
 
@@ -86,10 +139,32 @@ class NetworkScannerGUI(QWidget):
         self.scan_button = QPushButton("Run Full Scan")
         self.scan_button.clicked.connect(self.run_scan)
 
+        self.monitor_button = QPushButton(
+            "Start Monitoring"
+        )
+
+        self.monitor_button.clicked.connect(
+            self.start_monitoring
+        )
+
+        self.stop_monitor_button = QPushButton(
+            "Stop Monitoring"
+        )
+
+        self.stop_monitor_button.clicked.connect(
+            self.stop_monitoring
+        )
+
         self.export_button = QPushButton("Export Report")
         self.export_button.clicked.connect(self.export_report)
 
         btn_layout.addWidget(self.scan_button)
+        btn_layout.addWidget(
+            self.monitor_button
+        )
+        btn_layout.addWidget(
+            self.stop_monitor_button
+        )
         btn_layout.addWidget(self.export_button)
 
         main_layout.addLayout(btn_layout)
@@ -121,28 +196,184 @@ class NetworkScannerGUI(QWidget):
 
     def run_scan(self):
 
-        target = self.target_input.text().strip()
+        self.output_box.clear()
+        self.report_data = ""
+        self.update_risk_card("0")
 
+        self.scan_button.setEnabled(False)
+
+        target = self.target_input.text().strip()
         if not target:
             target = get_gateway()
 
-        self.output_box.clear()
-        self.report_data = ""
-        self.progress.setValue(0)
+        self.worker = ScanWorker(self, target)
 
-        self.log("=" * 60)
-        self.log("JUST-JD NETWORK SCANNING TOOL v2.2")
-        self.log("=" * 60)
+        self.worker.log_signal.connect(self.log)
+        self.worker.progress_signal.connect(self.progress.setValue)
+        self.worker.internet_signal.connect(self.internet_value.setText)
+        self.worker.dns_signal.connect(self.dns_value.setText)
+        self.worker.devices_signal.connect(self.devices_value.setText)
+        self.worker.score_signal.connect(self.score_value.setText)
+        self.worker.risk_signal.connect(self.update_risk_card)
+        self.worker.finished_signal.connect(self.scan_finished)
+
+        self.worker.start()
+
+    def scan_finished(self):
+
+        self.scan_button.setEnabled(True)
+        self.log("\nSCAN COMPLETED")
+
+    def update_risk_card(self, risk_count_str):
+
+        self.risk_value.setText(risk_count_str)
+
+        try:
+            risk_count = int(risk_count_str)
+        except ValueError:
+            risk_count = 0
+
+        if risk_count == 0:
+            self.risk_value.setStyleSheet(
+                "font-size:22px;font-weight:bold;color:#00ff88;border:none;"
+            )
+
+        elif risk_count <= 2:
+            self.risk_value.setStyleSheet(
+                "font-size:22px;font-weight:bold;color:#ffaa00;border:none;"
+            )
+
+        else:
+            self.risk_value.setStyleSheet(
+                "font-size:22px;font-weight:bold;color:#ff4444;border:none;"
+            )
+
+    def start_monitoring(self):
+
+        target = self.target_input.text().strip()
+
+        if not target:
+            return
+
+        self.monitored_hosts = [target]
+
+        self.monitored_value.setText(
+            str(len(self.monitored_hosts))
+        )
+
+        self.alert_count = 0
+
+        self.alert_value.setText("0")
+
+        self.update_alert_color()
+
+        self.monitor_timer.start(5000)
+
+        self.log(
+            f"\nMonitoring Started: {target}"
+        )
+
+    def stop_monitoring(self):
+
+        self.monitor_timer.stop()
+
+        self.monitored_hosts = []
+
+        self.monitored_value.setText("0")
+
+        self.log(
+            "\nMonitoring Stopped"
+        )
+
+    def run_monitor_check(self):
+
+        from datetime import datetime
+
+        current_time = datetime.now().strftime(
+            "%H:%M:%S"
+        )
+
+        for host in self.monitored_hosts:
+
+            status = monitor_host(host)
+
+            if status:
+
+                self.log(
+                    f"\n[MONITOR] {host} ONLINE"
+                )
+
+                self.log(
+                    f"Time: {current_time}"
+                )
+
+            else:
+
+                QApplication.beep()
+
+                self.alert_count += 1
+
+                self.alert_value.setText(
+                    str(self.alert_count)
+                )
+
+                self.update_alert_color()
+
+                self.log(
+                    f"\n[ALERT] {host} OFFLINE"
+                )
+
+                self.log(
+                    f"Time: {current_time}"
+                )
+
+    def update_alert_color(self):
+
+        if self.alert_count == 0:
+
+            self.alert_value.setStyleSheet(
+                "font-size:22px;font-weight:bold;color:#00ff88;border:none;"
+            )
+
+        elif self.alert_count <= 2:
+
+            self.alert_value.setStyleSheet(
+                "font-size:22px;font-weight:bold;color:#ffaa00;border:none;"
+            )
+
+        else:
+
+            self.alert_value.setStyleSheet(
+                "font-size:22px;font-weight:bold;color:#ff4444;border:none;"
+            )
+
+    def perform_scan(
+        self,
+        target,
+        log_signal,
+        progress_signal,
+        internet_signal,
+        dns_signal,
+        devices_signal,
+        score_signal,
+        risk_signal
+    ):
+
+        progress_signal.emit(0)
+
+        log_signal.emit("=" * 60)
+        log_signal.emit("JUST-JD NETWORK SCANNING TOOL v2.2")
+        log_signal.emit("=" * 60)
 
         ping_result = check_ping(target)
-        self.log("\nPING TEST")
-        self.log(ping_result)
+        log_signal.emit("\nPING TEST")
+        log_signal.emit(ping_result)
 
-        self.internet_value.setText(
+        internet_signal.emit(
             "ONLINE" if "Reachable" in ping_result else "OFFLINE"
         )
 
-        self.progress.setValue(10)
+        progress_signal.emit(10)
 
         if any(c.isalpha() for c in target):
 
@@ -151,45 +382,45 @@ class NetworkScannerGUI(QWidget):
         else:
 
             dns_result = "IP Target - DNS Skipped"
-        self.log("\nDNS TEST")
-        self.log(dns_result)
+        log_signal.emit("\nDNS TEST")
+        log_signal.emit(dns_result)
 
         if "->" in dns_result:
 
-            self.dns_value.setText("OK")
+            dns_signal.emit("OK")
 
         elif "Skipped" in dns_result:
 
-            self.dns_value.setText("N/A")
+            dns_signal.emit("N/A")
 
         else:
 
-            self.dns_value.setText("FAIL")
+            dns_signal.emit("FAIL")
 
-        self.progress.setValue(20)
+        progress_signal.emit(20)
 
         local_ip = get_local_ip()
 
-        self.log("\nLOCAL IP")
-        self.log(local_ip)
+        log_signal.emit("\nLOCAL IP")
+        log_signal.emit(local_ip)
 
-        self.progress.setValue(30)
+        progress_signal.emit(30)
 
         gateway = get_gateway()
 
-        self.log("\nDEFAULT GATEWAY")
-        self.log(gateway)
+        log_signal.emit("\nDEFAULT GATEWAY")
+        log_signal.emit(gateway)
 
-        self.progress.setValue(40)
+        progress_signal.emit(40)
 
         loss = packet_loss_test(target)
 
-        self.log("\nPACKET LOSS TEST")
-        self.log(f"Packet Loss: {loss}")
+        log_signal.emit("\nPACKET LOSS TEST")
+        log_signal.emit(f"Packet Loss: {loss}")
 
-        self.progress.setValue(50)
+        progress_signal.emit(50)
 
-        self.log("\nDEVICE DISCOVERY")
+        log_signal.emit("\nDEVICE DISCOVERY")
 
         try:
             cidr = get_cidr()
@@ -199,44 +430,51 @@ class NetworkScannerGUI(QWidget):
             strict=False
             )
 
-            devices = scan_network(
-            str(network)
-)
+            devices = get_arp_devices()
 
             for device in devices:
-                self.log(f"IP: {device['ip']} | MAC: {device['mac']}")
 
-            self.log(f"\nTotal Devices Found: {len(devices)}")
-            self.devices_value.setText(str(len(devices)))
+                log_signal.emit(
+                    f"IP: {device['ip']} | "
+                    f"HOST: {device['hostname']} | "
+                    f"MAC: {device['mac']} | "
+                    f"VENDOR: {device['vendor']}"
+                )
+
+            log_signal.emit(f"\nTotal Devices Found: {len(devices)}")
+            devices_signal.emit(str(len(devices)))
 
         except Exception as e:
-            self.log(str(e))
+            log_signal.emit(str(e))
 
-        self.progress.setValue(65)
+        progress_signal.emit(65)
 
-        self.log("\nSUBNET ANALYSIS")
+        log_signal.emit("\nSUBNET ANALYSIS")
 
         try:
             cidr = get_cidr()
 
             subnet = calculate_subnet(local_ip, cidr)
 
-            self.log(f"Network ID : {subnet['network_id']}")
-            self.log(f"Broadcast : {subnet['broadcast']}")
-            self.log(f"Usable Hosts : {subnet['total_hosts']}")
-            self.log(f"CIDR : {subnet['cidr']}")
+            log_signal.emit(f"Network ID : {subnet['network_id']}")
+            log_signal.emit(f"Broadcast : {subnet['broadcast']}")
+            log_signal.emit(f"Usable Hosts : {subnet['total_hosts']}")
+            log_signal.emit(f"CIDR : {subnet['cidr']}")
 
         except Exception as e:
-            self.log(str(e))
+            log_signal.emit(str(e))
 
-        self.progress.setValue(75)
+        progress_signal.emit(75)
 
-        self.log("\nPORT SCAN")
+        log_signal.emit("\nPORT SCAN")
 
         ports = [22, 80, 443, 445, 3389]
         open_ports = 0
+        risk_count = 0
+        security_findings = []
 
         for port in ports:
+
             try:
                 status = scan_port(
                     target,
@@ -246,16 +484,64 @@ class NetworkScannerGUI(QWidget):
             except Exception as e:
                 status = f"ERROR: {e}"
 
-            self.log(f"Port {port}: {status}")
+            log_signal.emit(f"Port {port}: {status}")
 
             if status == "OPEN":
+
+                finding = analyze_port(
+                    port,
+                    status
+                )
+
+                if finding:
+
+                    security_findings.append(
+                        (
+                            port,
+                            finding
+                        )
+                    )
+
+                    if finding["risk"] in [
+                        "HIGH",
+                        "WARNING",
+                        "MEDIUM"
+                    ]:
+                        risk_count += 1
+
                 open_ports += 1
 
-        self.log(f"\nOpen Ports Found: {open_ports}")
+        log_signal.emit(f"\nOpen Ports Found: {open_ports}")
 
-        self.progress.setValue(90)
+        log_signal.emit("\nSECURITY FINDINGS")
 
-        self.log("\nTRACEROUTE")
+        if security_findings:
+
+            for port, finding in security_findings:
+
+                log_signal.emit(
+                    f"\n{port}/TCP {finding['service']}"
+                )
+
+                log_signal.emit(
+                    f"Risk: {finding['risk']}"
+                )
+
+                log_signal.emit(
+                    f"Reason: {finding['reason']}"
+                )
+
+        else:
+
+            log_signal.emit(
+                "No risky open ports detected."
+            )
+
+        risk_signal.emit(str(risk_count))
+
+        progress_signal.emit(90)
+
+        log_signal.emit("\nTRACEROUTE")
 
         try:
             trace = run_traceroute(target)
@@ -263,11 +549,11 @@ class NetworkScannerGUI(QWidget):
             trace = f"Traceroute Error: {e}"
 
         if trace:
-            self.log(trace[:5000])
+            log_signal.emit(trace[:5000])
         else:
-            self.log("Traceroute Failed")
+            log_signal.emit("Traceroute Failed")
 
-        self.progress.setValue(95)
+        progress_signal.emit(95)
 
         score = calculate_score(
             ping_result,
@@ -275,12 +561,12 @@ class NetworkScannerGUI(QWidget):
             open_ports
         )
 
-        self.log("\nNETWORK HEALTH SCORE")
-        self.log(f"{score}/100")
+        log_signal.emit("\nNETWORK HEALTH SCORE")
+        log_signal.emit(f"{score}/100")
 
-        self.score_value.setText(f"{score}/100")
+        score_signal.emit(f"{score}/100")
 
-        self.progress.setValue(100)
+        progress_signal.emit(100)
 
     def export_report(self):
 
