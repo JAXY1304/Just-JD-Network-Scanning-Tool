@@ -86,7 +86,7 @@ class NetworkScannerGUI(QWidget):
 
         self.monitored_hosts = []
 
-        self.setWindowTitle("JUST-JD NOC PLATFORM v3.1")
+        self.setWindowTitle("JUST-JD NOC PLATFORM v3.2")
         screen = QApplication.primaryScreen()
         size = screen.availableGeometry()
         self.resize(size.width(), size.height())
@@ -154,21 +154,17 @@ QLineEdit {
         self.internet_value = QLabel("WAIT")
         self.dns_value = QLabel("WAIT")
         self.devices_value = QLabel("0")
-        self.score_value = QLabel("0/100")
+        self.score_value = QLabel("N/A")
         self.risk_value = QLabel("0")
         self.monitored_value = QLabel("0")
         self.alert_value = QLabel("0")
         self.alert_count = 0
         self.hosts_value = QLabel("0")
         self.events_value = QLabel("0")
-        self.uptime_value = QLabel("100%")
+
+        self.uptime_value = QLabel("N/A")
         
-        try:
-            if os.path.exists("reports/device_events.csv"):
-                with open("reports/device_events.csv", "r", encoding="utf-8") as f:
-                    self.events_value.setText(str(sum(1 for row in f) - 1))
-        except Exception:
-            pass
+
 
         dashboard.addWidget(self.create_card("🖥 TOTAL HOSTS", self.hosts_value), 0, 0)
         dashboard.addWidget(self.create_card("🌐 ONLINE HOSTS", self.monitored_value), 0, 1)
@@ -476,8 +472,33 @@ border:none;
         progress_signal.emit(0)
 
         log_signal.emit("=" * 60)
-        log_signal.emit("JUST-JD NETWORK SCANNING TOOL v2.2")
+        log_signal.emit("JUST-JD NETWORK SCANNING TOOL v3.2")
         log_signal.emit("=" * 60)
+
+        # ── Target Classification ──
+        is_private_ip = False
+        is_public_ip = False
+        is_domain = False
+
+        try:
+            ip_obj = ipaddress.ip_address(target)
+            if ip_obj.is_private or ip_obj.is_loopback:
+                is_private_ip = True
+                target_type = "PRIVATE IP"
+            else:
+                is_public_ip = True
+                target_type = "PUBLIC IP"
+        except ValueError:
+            is_domain = True
+            target_type = "DOMAIN"
+
+        log_signal.emit(f"\n🎯 TARGET: {target}")
+        log_signal.emit(f"📋 TYPE : {target_type}")
+
+        if is_private_ip:
+            log_signal.emit("🔒 MODE : Full Internal Scan (Device Discovery Enabled)")
+        else:
+            log_signal.emit("🌐 MODE : External Scan (Device Discovery Skipped)")
 
         ping_result = check_ping(target)
         log_signal.emit("\nPING TEST")
@@ -536,76 +557,86 @@ border:none;
 
         log_signal.emit("\nDEVICE DISCOVERY")
 
-        try:
-            cidr = get_cidr()
+        if is_private_ip:
+            try:
+                cidr = get_cidr()
 
-            network = ipaddress.ip_network(
-            f"{local_ip}/{cidr}",
-            strict=False
-            )
-
-            devices = get_arp_devices()
-            
-            current_devices = {}
-
-            for device in devices:
-                ip = device["ip"]
-                mac = device["mac"]
-                vendor = device.get("vendor", "Unknown")
-                current_devices[ip] = vendor
-                
-                if ip in self.mac_history:
-                    old_mac = self.mac_history[ip]
-                    if old_mac != mac:
-                        log_signal.emit(f"[WARNING] {ip} MAC Changed")
-                self.mac_history[ip] = mac
-
-                log_signal.emit(
-                    f"IP: {device['ip']} | "
-                    f"HOST: {device['hostname']} | "
-                    f"MAC: {device['mac']} | "
-                    f"VENDOR: {device['vendor']}"
+                network = ipaddress.ip_network(
+                f"{local_ip}/{cidr}",
+                strict=False
                 )
 
-            new_devices = set(current_devices) - set(self.previous_devices)
-            for ip in new_devices:
-                vendor = current_devices[ip]
-                log_signal.emit(f"[NEW DEVICE] {ip} ({vendor})")
-                save_device_event("NEW_DEVICE", ip, vendor)
+                devices = get_arp_devices()
                 
-            lost_devices = set(self.previous_devices) - set(current_devices)
-            for ip in lost_devices:
-                vendor = self.previous_devices[ip]
-                log_signal.emit(f"[DEVICE LOST] {ip} ({vendor})")
-                save_device_event("DEVICE_LOST", ip, vendor)
+                current_devices = {}
+
+                for device in devices:
+                    ip = device["ip"]
+                    mac = device["mac"]
+                    vendor = device.get("vendor", "Unknown")
+                    current_devices[ip] = vendor
+                    
+                    if ip in self.mac_history:
+                        old_mac = self.mac_history[ip]
+                        if old_mac != mac:
+                            log_signal.emit(f"[WARNING] {ip} MAC Changed")
+                    self.mac_history[ip] = mac
+
+                    log_signal.emit(
+                        f"IP: {device['ip']} | "
+                        f"HOST: {device['hostname']} | "
+                        f"MAC: {device['mac']} | "
+                        f"VENDOR: {device['vendor']}"
+                    )
+
+                new_devices = set(current_devices) - set(self.previous_devices)
+                for ip in new_devices:
+                    vendor = current_devices[ip]
+                    log_signal.emit(f"[NEW DEVICE] {ip} ({vendor})")
+                    save_device_event("NEW_DEVICE", ip, vendor)
+                    
+                lost_devices = set(self.previous_devices) - set(current_devices)
+                for ip in lost_devices:
+                    vendor = self.previous_devices[ip]
+                    log_signal.emit(f"[DEVICE LOST] {ip} ({vendor})")
+                    save_device_event("DEVICE_LOST", ip, vendor)
+                    
+                self.previous_devices = current_devices
                 
-            self.previous_devices = current_devices
-            
-            save_inventory(devices)
+                save_inventory(devices)
 
-            log_signal.emit(f"\nTotal Devices Found: {len(devices)}")
-            devices_signal.emit(str(len(devices)))
-            hosts_signal.emit(str(len(devices)))
+                log_signal.emit(f"\nTotal Devices Found: {len(devices)}")
+                devices_signal.emit(str(len(devices)))
+                hosts_signal.emit(str(len(devices)))
 
-        except Exception as e:
-            log_signal.emit(str(e))
+            except Exception as e:
+                log_signal.emit(str(e))
+        else:
+            log_signal.emit("⏭ Skipped — Device Discovery only runs for Private/Internal IPs")
+            log_signal.emit(f"  Reason: Target '{target}' is a {target_type}")
+            devices_signal.emit("N/A")
+            hosts_signal.emit("N/A")
 
         progress_signal.emit(65)
 
         log_signal.emit("\nSUBNET ANALYSIS")
 
-        try:
-            cidr = get_cidr()
+        if is_private_ip:
+            try:
+                cidr = get_cidr()
 
-            subnet = calculate_subnet(local_ip, cidr)
+                subnet = calculate_subnet(local_ip, cidr)
 
-            log_signal.emit(f"Network ID : {subnet['network_id']}")
-            log_signal.emit(f"Broadcast : {subnet['broadcast']}")
-            log_signal.emit(f"Usable Hosts : {subnet['total_hosts']}")
-            log_signal.emit(f"CIDR : {subnet['cidr']}")
+                log_signal.emit(f"Network ID : {subnet['network_id']}")
+                log_signal.emit(f"Broadcast : {subnet['broadcast']}")
+                log_signal.emit(f"Usable Hosts : {subnet['total_hosts']}")
+                log_signal.emit(f"CIDR : {subnet['cidr']}")
 
-        except Exception as e:
-            log_signal.emit(str(e))
+            except Exception as e:
+                log_signal.emit(str(e))
+        else:
+            log_signal.emit("⏭ Skipped — Subnet Analysis only runs for Private/Internal IPs")
+            log_signal.emit(f"  Reason: Target '{target}' is a {target_type}")
 
         progress_signal.emit(75)
 

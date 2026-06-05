@@ -14,11 +14,35 @@ from modules.arp_scan import scan_network
 from modules.subnet_calc import calculate_subnet
 
 print("=" * 50)
-print("JUST-JD NETWORK SCANNING TOOL")
+print("JUST-JD NETWORK SCANNING TOOL v3.2")
 print("=" * 50)
 
 # Target = Gateway
 target = get_gateway()
+
+# ── Target Classification ──
+is_private_ip = False
+is_public_ip = False
+is_domain = False
+
+try:
+    ip_obj = ipaddress.ip_address(target)
+    if ip_obj.is_private or ip_obj.is_loopback:
+        is_private_ip = True
+        target_type = "PRIVATE IP"
+    else:
+        is_public_ip = True
+        target_type = "PUBLIC IP"
+except ValueError:
+    is_domain = True
+    target_type = "DOMAIN"
+
+print(f"\n🎯 TARGET: {target}")
+print(f"📋 TYPE : {target_type}")
+if is_private_ip:
+    print("🔒 MODE : Full Internal Scan (Device Discovery Enabled)")
+else:
+    print("🌐 MODE : External Scan (Device Discovery Skipped)")
 
 # Ping Test
 print("\nPING TEST")
@@ -70,47 +94,56 @@ print(f"Packet Loss: {loss}")
 # Device Discovery
 print("\nDEVICE DISCOVERY")
 
-local_ip = get_local_ip()
+if is_private_ip:
+    local_ip = get_local_ip()
 
-cidr = get_cidr()
+    cidr = get_cidr()
 
-network = ipaddress.ip_network(
-    f"{local_ip}/{cidr}",
-    strict=False
-)
-
-devices = scan_network(str(network))
-
-for device in devices:
-
-    print(
-        f"IP: {device['ip']} | MAC: {device['mac']}"
+    network = ipaddress.ip_network(
+        f"{local_ip}/{cidr}",
+        strict=False
     )
 
-# Permission denied handling
-if (
-    len(devices) == 1
-    and devices[0]["ip"] == "Permission Denied"
-):
-    device_count = 0
+    devices = scan_network(str(network))
 
+    for device in devices:
+
+        print(
+            f"IP: {device['ip']} | MAC: {device['mac']}"
+        )
+
+    # Permission denied handling
+    if (
+        len(devices) == 1
+        and devices[0]["ip"] == "Permission Denied"
+    ):
+        device_count = 0
+
+    else:
+        device_count = len(devices)
+
+    print(f"\nTotal Devices Found: {device_count}")
 else:
-    device_count = len(devices)
-
-print(f"\nTotal Devices Found: {device_count}")
+    print("⏭ Skipped — Device Discovery only runs for Private/Internal IPs")
+    print(f"  Reason: Target '{target}' is a {target_type}")
+    device_count = 0
 
 # Subnet Analysis
 print("\nSUBNET ANALYSIS")
 
-subnet_info = calculate_subnet(
-    local_ip,
-    cidr
-)
+if is_private_ip:
+    subnet_info = calculate_subnet(
+        local_ip,
+        cidr
+    )
 
-print(f"Network ID   : {subnet_info['network_id']}")
-print(f"Broadcast IP : {subnet_info['broadcast']}")
-print(f"Usable Hosts : {subnet_info['total_hosts']}")
-print(f"CIDR         : {subnet_info['cidr']}")
+    print(f"Network ID   : {subnet_info['network_id']}")
+    print(f"Broadcast IP : {subnet_info['broadcast']}")
+    print(f"Usable Hosts : {subnet_info['total_hosts']}")
+    print(f"CIDR         : {subnet_info['cidr']}")
+else:
+    print("⏭ Skipped — Subnet Analysis only runs for Private/Internal IPs")
+    print(f"  Reason: Target '{target}' is a {target_type}")
 
 # Port Scan
 open_ports = 0
