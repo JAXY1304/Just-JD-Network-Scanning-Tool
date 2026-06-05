@@ -41,6 +41,7 @@ class ScanWorker(QThread):
     score_signal = pyqtSignal(str)
     risk_signal = pyqtSignal(str)
     hosts_signal = pyqtSignal(str)
+    uptime_signal = pyqtSignal(str)
 
     def __init__(self, gui, target):
         super().__init__()
@@ -57,7 +58,8 @@ class ScanWorker(QThread):
             self.devices_signal,
             self.score_signal,
             self.risk_signal,
-            self.hosts_signal
+            self.hosts_signal,
+            self.uptime_signal
         )
 
         self.finished_signal.emit()
@@ -314,6 +316,7 @@ border:none;
         self.worker.score_signal.connect(self.score_value.setText)
         self.worker.risk_signal.connect(self.update_risk_card)
         self.worker.hosts_signal.connect(self.hosts_value.setText)
+        self.worker.uptime_signal.connect(self.uptime_value.setText)
         self.worker.finished_signal.connect(self.scan_finished)
 
         self.worker.start()
@@ -466,7 +469,8 @@ border:none;
         devices_signal,
         score_signal,
         risk_signal,
-        hosts_signal
+        hosts_signal,
+        uptime_signal
     ):
 
         progress_signal.emit(0)
@@ -507,6 +511,11 @@ border:none;
         internet_signal.emit(
             "ONLINE" if "Reachable" in ping_result else "OFFLINE"
         )
+
+        if "Reachable" in ping_result:
+            uptime_signal.emit("100%")
+        else:
+            uptime_signal.emit("0%")
 
         progress_signal.emit(10)
 
